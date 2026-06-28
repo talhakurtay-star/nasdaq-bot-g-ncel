@@ -41,11 +41,18 @@ logging.disable(logging.WARNING)
 
 from backtest_v2 import run_backtest  # noqa: E402
 
+# Gerçek MT5 verileri (csv/real/). argv ile alt küme seçilebilir:
+#   python overfit_test.py NAS100 US30
+_REAL = _V1 / "csv" / "real"
 CACHES = {
-    "TECH":   _V1 / "cache" / "cache_15m_360d.csv",
-    "EURUSD": _V1 / "cache" / "cache_EURUSD_15m.csv",
-    "XAUUSD": _V1 / "cache" / "cache_XAUUSD_15m.csv",
+    "NAS100": _REAL / "NAS100_15m.csv",
+    "US30":   _REAL / "US30_15m.csv",
+    "GER40":  _REAL / "GER40_15m.csv",
+    "UK100":  _REAL / "UK100_15m.csv",
+    "XAUUSD": _REAL / "XAUUSD_15m.csv",
 }
+if len(sys.argv) > 1:
+    CACHES = {k: v for k, v in CACHES.items() if k in sys.argv[1:]}
 
 IS_FRACTION = 0.70
 
@@ -89,7 +96,7 @@ def _verdict(is_m: dict, oos_m: dict) -> str:
 def main() -> None:
     print("=" * 78)
     print("  OVERFITTING / ROBUSTLUK TESTİ  (IS %70 / OOS %30 + çapraz-enstrüman)")
-    print("  ⚠️  Veri SENTETİKtir — sonuçlar metodoloji gösterimidir, kesin yargı değil")
+    print(f"  Veri: GERÇEK MT5 15m | BACKTEST_DAYS={os.getenv('BACKTEST_DAYS','360')}")
     print("=" * 78)
 
     for name, path in CACHES.items():

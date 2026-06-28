@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+env/
+
+# Test / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Bot çıktıları / durumu
+data_cache/
+*.log
+state/
+*.csv
+!tests/**/*.csv
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store

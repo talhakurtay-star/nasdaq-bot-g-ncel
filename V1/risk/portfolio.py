@@ -89,6 +89,8 @@ class PortfolioManager:
         self.equity: float = INITIAL_BALANCE
         self.open_position: Optional[Position] = None
         self.daily_peak_equity: float = INITIAL_BALANCE
+        # Günlük kâr kilidi referansı: o günün başındaki equity.
+        self.daily_start_equity: float = INITIAL_BALANCE
         self.trade_log: list = []
         self._total_commission: float = 0.0
 
@@ -380,6 +382,8 @@ class PortfolioManager:
 
     def reset_daily_peak(self) -> None:
         self.daily_peak_equity = self.equity
+        # Yeni günün başlangıç equity'si — günlük kâr kilidi bunu referans alır.
+        self.daily_start_equity = self.equity
         logger.debug("Daily peak equity reset -> %.2f", self.equity)
 
     def summary(self) -> Dict:

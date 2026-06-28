@@ -72,7 +72,8 @@ UNIVERSE: list[str] = [
 ]
 
 # Aynı anda maksimum açık pozisyon sayısı
-MAX_OPEN_POSITIONS = int(os.getenv("STRESS_MAX_POSITIONS", "3"))
+# funded-survival: 3 → 2 (korele eşzamanlı risk: 2 × %1 = %2)
+MAX_OPEN_POSITIONS = int(os.getenv("STRESS_MAX_POSITIONS", "2"))
 
 # Sektörel korelasyon koruması: aynı sektörden max pozisyon sayısı
 MAX_SECTOR_POSITIONS = int(os.getenv("STRESS_MAX_SECTOR_POS", "2"))
@@ -150,17 +151,32 @@ TRAILING_ATR_MULT     = float(os.getenv("STRESS_TRAIL_ATR",   "3.5"))  # > ATR_M
 ATR_MULTIPLIER        = float(os.getenv("STRESS_ATR_MULT",    "2.5"))  # Geniş SL: erken tetiklenmeyi azaltır, WR artar
 
 # ── Risk Yönetimi ve Prop Firm Limitleri ──────────────────────────────────────
+# HEDEF: funded hesabı UZUN SÜRE yaşatmak (getiri maksimizasyonu DEĞİL).
+# Strateji: tek işlem riski, firma limitini hiçbir zaman "overshoot" edemeyecek
+# kadar küçük; iç limitler firma limitinin altında tampon bırakır.
+#
 # RISK_PER_TRADE: İşlem başına risk yüzdesi (Örn: 1.00 -> %1)
-RISK_PER_TRADE_PCT = float(os.getenv("STRESS_RISK_PCT", "3.0"))  # 3.0%: ~15%/ay IS | 2.5% ile ~9%/ay | 2.0% ile daha güvenli
+# funded-survival: 3.0 → 1.0 (1% × 3 ardışık kayıp = %3 → circuit breaker +
+#   günlük iç limit yakalar; firmanın %5 günlük limitine asla varılmaz)
+RISK_PER_TRADE_PCT = float(os.getenv("STRESS_RISK_PCT", "1.0"))  # ~%5-7/ay; survival sınırı
 RISK_PER_TRADE = RISK_PER_TRADE_PCT / 100.0                     # Lojik işlemlerde kullanılan decimal değer
 
 # DAILY_DRAWDOWN_LIMIT: Günlük maksimum kayıp limiti (% cinsinden)
-DAILY_DRAWDOWN_LIMIT = float(os.getenv("STRESS_DAILY_DD", "4.0"))  # Varsayılan %4.0
+# funded-survival: 4.0 → 3.0 (firmanın %5'inin altında tampon)
+DAILY_DRAWDOWN_LIMIT = float(os.getenv("STRESS_DAILY_DD", "3.0"))
 MAX_DAILY_DRAWDOWN_PCT = DAILY_DRAWDOWN_LIMIT / 100.0
 
 # TOTAL_DRAWDOWN_LIMIT: Hesap genelinde maksimum kayıp limiti (% cinsinden)
-TOTAL_DRAWDOWN_LIMIT = float(os.getenv("STRESS_TOTAL_DD", "9.0"))  # Varsayılan %9.0
+# funded-survival: 9.0 → 6.0 (firmanın %10'unun altında geniş tampon)
+TOTAL_DRAWDOWN_LIMIT = float(os.getenv("STRESS_TOTAL_DD", "6.0"))
 MAX_TOTAL_DRAWDOWN_PCT = TOTAL_DRAWDOWN_LIMIT / 100.0
+
+# ── Günlük Kâr Kilidi (Daily Profit Lock) — funded-survival için YENİ ──────────
+# Gün içi kâr bu eşiğe ulaşınca o gün YENİ işlem açılmaz (açık pozisyon normal
+# yönetilmeye devam eder). Amaç: iyi bir günü geri vermemek. Survival'ın en
+# kritik kuralı. 0.0 → kapalı.
+DAILY_PROFIT_LOCK_PCT = float(os.getenv("STRESS_DAILY_PROFIT_LOCK", "2.0"))
+MAX_DAILY_PROFIT_LOCK = DAILY_PROFIT_LOCK_PCT / 100.0
 
 # ── Zaman Filtreleri ──────────────────────────────────────────────────────────
 TRADE_START_HOUR = int(os.getenv("STRESS_START_HOUR", "1"))      # UTC: tüm gün (NAS100 CFD 24h)
@@ -226,4 +242,9 @@ CONTRACT_SIZE = float(os.getenv("STRESS_CONTRACT_SIZE", "1.0"))
 
 # Dinamik lot tavanı: notional pozisyon büyüklüğü hesap bakiyesinin bu katını aşamaz.
 # Broker seviyesinde ayrıca sembol min/max lot limitleri canlı emir öncesinde uygulanır.
-MAX_NOTIONAL_LEVERAGE = float(os.getenv("STRESS_MAX_NOTIONAL_LEVERAGE", "20.0"))
+# funded-survival: 20× → 10× (margin patlama riskini yarıya indir)
+MAX_NOTIONAL_LEVERAGE = float(os.getenv("STRESS_MAX_NOTIONAL_LEVERAGE", "10.0"))
+
+# ── Günlük İşlem Sayısı Tavanı (Overtrading Koruması) ─────────────────────────
+# funded-survival: sınırsız → 5 (kötü bir günde varyansı sınırla)
+MAX_DAILY_TRADES = int(os.getenv("STRESS_MAX_DAILY_TRADES", "5"))

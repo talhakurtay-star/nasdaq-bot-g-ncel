@@ -46,6 +46,8 @@ try:
         INITIAL_BALANCE,
         MAX_DAILY_DRAWDOWN_PCT,
         MAX_TOTAL_DRAWDOWN_PCT,
+        MAX_DAILY_PROFIT_LOCK,
+        MAX_DAILY_TRADES,
         THURSDAY_CUTOFF_HOUR,
         TRADE_END_HOUR,
         TRADE_START_HOUR,
@@ -55,8 +57,10 @@ except ImportError:
     ALLOW_WEEKEND_HOLDING   = False
     BLOCK_FRIDAY_ENTRIES    = True
     INITIAL_BALANCE         = 100_000.0
-    MAX_DAILY_DRAWDOWN_PCT  = 0.04
-    MAX_TOTAL_DRAWDOWN_PCT  = 0.09
+    MAX_DAILY_DRAWDOWN_PCT  = 0.03
+    MAX_TOTAL_DRAWDOWN_PCT  = 0.06
+    MAX_DAILY_PROFIT_LOCK   = 0.02
+    MAX_DAILY_TRADES        = 5
     THURSDAY_CUTOFF_HOUR    = 22
     TRADE_END_HOUR          = 23
     TRADE_START_HOUR        = 16
@@ -89,10 +93,11 @@ class RiskGuardrails:
         self.daily_drawdown_triggered: bool = False
         self.total_drawdown_triggered: bool = False
         self.daily_trades_count:       int  = 0
-        self.max_daily_trades:         int  = 99  # Günlük limit yok — circuit breaker yönetir
+        self.max_daily_trades:         int  = MAX_DAILY_TRADES  # overtrading koruması
         self.consecutive_sl_count:     int  = 0
         self.circuit_breaker_active:   bool = False
         self.max_consecutive_sl:       int  = 3   # 3 art arda SL → o gün dur
+        self.daily_profit_locked:      bool = False  # Günlük kâr kilidi tetiklendi mi
 
         logger.info(
             "RiskGuardrails başlatıldı | "
@@ -192,7 +197,45 @@ class RiskGuardrails:
         self.daily_trades_count    = 0
         self.consecutive_sl_count  = 0
         self.circuit_breaker_active = False
+        self.daily_profit_locked    = False
         logger.info("Günlük drawdown sayacı sıfırlandı.")
+
+    # ------------------------------------------------------------------
+    # 1b. Günlük Kâr Kilidi (Daily Profit Lock)
+    # ------------------------------------------------------------------
+
+    def check_daily_profit_lock(self, portfolio: "PortfolioManager") -> bool:
+        """
+        Gün içi kâr MAX_DAILY_PROFIT_LOCK eşiğine ulaştıysa kilidi tetikler.
+
+        Amaç (funded-survival): iyi bir günde kazanılanı geri vermemek.
+        Kilit aktifken o gün YENİ işlem açılmaz; açık pozisyon normal yönetilir
+        (SL/TP/trailing çalışmaya devam eder). Kilit her gün başında sıfırlanır.
+
+        Returns
+        -------
+        bool  True → kilit aktif (yeni işlem yok), False → serbest.
+        """
+        if MAX_DAILY_PROFIT_LOCK <= 0:
+            return False  # kapalı
+
+        if self.daily_profit_locked:
+            return True
+
+        start = portfolio.daily_start_equity
+        if start <= 0:
+            return False
+
+        daily_gain = (portfolio.equity - start) / start
+        if daily_gain >= MAX_DAILY_PROFIT_LOCK:
+            self.daily_profit_locked = True
+            logger.info(
+                "🔒 GÜNLÜK KÂR KİLİDİ — gün-içi kazanç %%%.2f >= %%%.1f. "
+                "Bugün yeni işlem yok (kâr korunuyor).",
+                daily_gain * 100, MAX_DAILY_PROFIT_LOCK * 100,
+            )
+            return True
+        return False
 
     # ------------------------------------------------------------------
     # 2. Zaman Penceresi Filtresi
@@ -289,6 +332,10 @@ class RiskGuardrails:
             False → En az bir filtre engelledi; yeni işlem yasak.
         """
         if self.check_drawdown_limits(portfolio):
+            return False
+
+        # ── Günlük Kâr Kilidi: kazanılan günü geri verme ─────────────────
+        if self.check_daily_profit_lock(portfolio):
             return False
 
         if not self.check_time_constraints(timestamp):

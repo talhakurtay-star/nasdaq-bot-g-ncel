@@ -56,7 +56,8 @@ TOTAL_DD_LIMIT    = TOTAL_DD_LIMIT_PCT / 100.0
 
 # ── Günlük gelir modeli ──────────────────────────────────────────────────────
 # Gün +hedefe ulaşınca o gün YENİ işlem yok (açık pozisyonlar yönetilmeye devam).
-DAILY_PROFIT_TARGET_PCT = _f("V3_DAILY_TARGET", 0.5)   # günlük kâr hedefi %
+# Hedef: günde +%0.22 → ~%5/ay (22 işlem günü). Kilit kazancı korur.
+DAILY_PROFIT_TARGET_PCT = _f("V3_DAILY_TARGET", 0.22)   # günlük kâr hedefi %
 DAILY_PROFIT_TARGET     = DAILY_PROFIT_TARGET_PCT / 100.0
 MAX_DAILY_TRADES        = _i("V3_MAX_DAILY_TRADES", 6)  # overtrading koruması
 MAX_CONSECUTIVE_SL      = _i("V3_MAX_CONSEC_SL", 3)     # circuit breaker
@@ -72,10 +73,14 @@ MACD_FAST, MACD_SLOW, MACD_SIGNAL = 12, 26, 9
 BB_PERIOD, BB_STD = 20, 2.0
 WARMUP_BARS = 210
 
-# ── Seans / zaman filtreleri (UTC saat) ──────────────────────────────────────
-TRADE_START_HOUR = _i("V3_START_HOUR", 14)   # RTH öncesi makul başlangıç
-TRADE_END_HOUR   = _i("V3_END_HOUR", 20)      # kapanış öncesi yeni işlem yok
-FORCE_CLOSE_HOUR = _i("V3_FORCE_CLOSE_HOUR", 20)
+# ── Seans / zaman filtreleri (VERİNİN BROKER SAATİ ~EET/GMT+2) ───────────────
+# NAS100 RTH seansı broker saatinde 16:30–23:00 (hacim/spread en iyi).
+# Hacim analizi: pik 17:00, yüksek 16:00–22:00, 23:00'te çöküyor.
+TRADE_START_HOUR = _i("V3_START_HOUR", 16)
+TRADE_START_MIN  = _i("V3_START_MIN", 30)
+TRADE_END_HOUR   = _i("V3_END_HOUR", 23)      # 23:00'a kadar yeni giriş
+TRADE_END_MIN    = _i("V3_END_MIN", 0)
+FORCE_CLOSE_HOUR = _i("V3_FORCE_CLOSE_HOUR", 22)  # Cuma flatten / hafta sonu
 BLOCK_FRIDAY_LATE = _b("V3_BLOCK_FRIDAY_LATE", True)  # Cuma geç saat yeni işlem yok
 ALLOW_WEEKEND_HOLDING = _b("V3_ALLOW_WEEKEND", False)
 

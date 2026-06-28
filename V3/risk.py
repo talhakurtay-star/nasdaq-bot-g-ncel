@@ -100,13 +100,15 @@ class RiskManager:
                 self.daily_locked = True
                 logger.warning("Circuit breaker — %d ardışık SL, gün kilitlendi.", self.consecutive_sl)
 
-    # ── Seans / zaman ────────────────────────────────────────────────────
+    # ── Seans / zaman (dakika-hassas: 16:30–23:00 broker saati) ──────────
     @staticmethod
     def _in_session(ts) -> bool:
-        h = ts.hour
-        if not (C.TRADE_START_HOUR <= h <= C.TRADE_END_HOUR):
+        tod = (ts.hour, ts.minute)
+        start = (C.TRADE_START_HOUR, C.TRADE_START_MIN)
+        end   = (C.TRADE_END_HOUR, C.TRADE_END_MIN)
+        if not (start <= tod < end):
             return False
-        if C.BLOCK_FRIDAY_LATE and ts.weekday() == _FRIDAY and h >= C.FORCE_CLOSE_HOUR:
+        if C.BLOCK_FRIDAY_LATE and ts.weekday() == _FRIDAY and ts.hour >= C.FORCE_CLOSE_HOUR:
             return False
         return True
 

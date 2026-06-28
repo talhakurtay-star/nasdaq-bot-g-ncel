@@ -15,7 +15,7 @@ from .. import config as C
 from ..account import Account
 from ..risk import RiskManager
 
-TS = datetime(2026, 1, 5, 15, 0)  # Pazartesi, seans içi
+TS = datetime(2026, 1, 5, 17, 0)  # Pazartesi 17:00, seans içi (16:30–23:00)
 
 
 def _fresh():
@@ -64,8 +64,12 @@ def test_circuit_breaker_after_consecutive_sl():
 
 def test_session_window_blocks_outside_hours():
     a, r = _fresh()
-    assert r.can_open(a, datetime(2026, 1, 5, 2, 0)) is False   # seans dışı
-    assert r.can_open(a, datetime(2026, 1, 5, 15, 0)) is True   # seans içi
+    assert r.can_open(a, datetime(2026, 1, 5, 2, 0)) is False    # seans dışı (gece)
+    assert r.can_open(a, datetime(2026, 1, 5, 15, 0)) is False   # 16:30 öncesi → dışı
+    assert r.can_open(a, datetime(2026, 1, 5, 16, 15)) is False  # 16:15 < 16:30 → dışı
+    assert r.can_open(a, datetime(2026, 1, 5, 16, 30)) is True   # 16:30 → içi
+    assert r.can_open(a, datetime(2026, 1, 5, 22, 45)) is True   # 22:45 → içi
+    assert r.can_open(a, datetime(2026, 1, 5, 23, 0)) is False   # 23:00 → kapanış, dışı
 
 
 def test_daily_reset_clears_locks():

@@ -1,127 +1,41 @@
-# NASDAQ Paper-Trading Botu
+# nasdaq-bot
 
-NASDAQ hisseleri için **kağıt üzerinde (paper trading)** alım-satım botu.
-**Gerçek para riski yoktur** — tüm emirler sanal bir portföy üzerinde simüle
-edilir. Geçmiş veride strateji test etme (backtest) ve gecikmeli canlı
-simülasyon (paper-trade döngüsü) yapabilir.
+NAS100 (NASDAQ-100) için prop-firm odaklı algoritmik alım-satım botu.
+İki sürüm içerir:
 
-## Özellikler
+- **V1** — Kural-bazlı çekirdek: iki katmanlı sinyal motoru (erken trend +
+  pullback), ATR-bazlı pozisyon boyutlandırma, prop-firm guardrail'leri
+  (günlük/toplam drawdown kill-switch, circuit breaker, hafta sonu flatten),
+  bar-by-bar backtest simülatörü, MT5 köprüsü ve walk-forward optimizer.
+- **V2** — V1'in üzerine kurulu 3 aşamalı pipeline:
+  - Stage 1 `RegimeDetector` — piyasa rejimi sınıflandırması (TREND/CHOPPY/BREAKOUT)
+  - Stage 2 `EnsembleSignal` — V1 kural motoru (+ opsiyonel LightGBM ensemble)
+  - Stage 3 `AdaptiveExit` — momentum-bazlı erken çıkış
 
-- 📊 **Backtest motoru** — geçmiş veride strateji simülasyonu, Sharpe / max
-  drawdown / CAGR gibi metrikler.
-- 🤖 **Canlı paper-trade döngüsü** — periyodik olarak veri çekip sanal
-  portföyü günceller (gerçek emir göndermez).
-- 🔌 **Eklenebilir veri katmanı** — `yfinance` (gerçek piyasa) veya
-  `synthetic` (internet gerektirmeyen çevrimdışı test/demo).
-- 📈 **Stratejiler** — SMA kesişimi (trend takip) ve RSI (mean-reversion).
-- ✅ Tamamı pytest ile test edilmiştir, ağ bağımlılığı yoktur.
-
-> **Uyarı:** Bu bir eğitim/araştırma projesidir, yatırım tavsiyesi değildir.
-> Sadece simülasyon yapar; gerçek bir broker'a emir göndermez.
-
-## Kurulum
+## Çalıştırma
 
 ```bash
-pip install -r requirements.txt
+pip install -r requirements.txt   # pandas, numpy, pandas_ta/talib, xgboost, lightgbm
+cd V2 && python backtest_v2.py    # dahili cache ile backtest
+CSV_PATH=/yol/nas100_15m.csv python backtest_v2.py   # kendi verinle
 ```
 
-Geliştirme (testler dahil):
+## ⚠️ Veri uyarısı
 
-```bash
-pip install -r requirements-dev.txt
-```
+`V1/cache/` içindeki dosyalar **sentetik/proxy** verilerdir (örn. `VIX_Close`
+sabit 15.0, `SPY_Close = Close`). Gerçek sonuç için MT5'ten export edilmiş
+gerçek NAS100 15m verisini `V1/csv/nasdaq_15m.csv` olarak koyun.
 
-## Kullanım
+## Risk profili
 
-### Backtest
+Bot, **funded hesabı uzun süre yaşatmak** hedefiyle konservatif risk profiline
+ayarlanmıştır (bkz. `V1/config/settings.py`):
 
-```bash
-# Gerçek veri (internet gerekir) - SMA kesişim stratejisi
-python -m nasdaqbot backtest --symbol AAPL --strategy sma --fast 20 --slow 50 --period 2y
+- İşlem başına risk: **%1.0**
+- Günlük iç DD limiti: **%3.0** (firma %5'inin altında tampon)
+- Toplam iç DD limiti: **%6.0** (firma %10'unun altında tampon)
+- Günlük kâr kilidi: **+%2 → o gün yeni işlem yok** (kârı geri vermeyi önler)
+- Eşzamanlı pozisyon: **2** · Kaldıraç tavanı: **10×** · Ardışık SL breaker: **3**
 
-# RSI stratejisi
-python -m nasdaqbot backtest --symbol MSFT --strategy rsi --rsi-lower 30 --rsi-upper 70
-
-# İnternetsiz / çevrimdışı demo (sentetik veri)
-python -m nasdaqbot backtest --provider synthetic --symbol DEMO --strategy sma
-```
-
-Örnek çıktı:
-
-```
-=== Backtest: AAPL | SMA crossover (fast=20, slow=50) ===
-Veri    : 504 bar (2024-07-23 → 2026-06-26)
-------------------------------------------------
-Başlangıç :    10,000.00 USD
-Son değer :    11,240.00 USD
-Getiri    :       12.40 %
-CAGR      :        6.02 %
-Sharpe    :        0.71
-Max düşüş :      -14.30 %
-İşlem     :           8
-```
-
-### Canlı paper-trade döngüsü
-
-```bash
-# Her saat başı (3600 sn) AAPL'yi değerlendir, sanal işlem yap
-python -m nasdaqbot run --symbol AAPL --strategy sma --poll-seconds 3600
-
-# Tek adım çalıştır (test için)
-python -m nasdaqbot run --symbol AAPL --max-steps 1
-```
-
-Durdurmak için `Ctrl-C`.
-
-### Önemli: İnternet / veri erişimi
-
-`yfinance` sağlayıcısı Yahoo Finance'e erişim gerektirir. Bazı kısıtlı/proxy'li
-ortamlarda (ör. CI veya sandbox) bu engellenebilir; o durumda komutlar
-`--provider synthetic` ile çalıştırılarak tüm akış internetsiz test edilebilir.
-
-## Yapılandırma
-
-`config.yaml` örnek varsayılanları içerir. Şu an CLI bayrakları birincil
-yapılandırma yöntemidir; tüm değerler komut satırından geçilebilir.
-
-## Mimari
-
-```
-nasdaqbot/
-├── data/                 # Veri katmanı (pluggable)
-│   ├── base.py           #   DataProvider arayüzü (OHLCV sözleşmesi)
-│   ├── yfinance_provider.py
-│   └── synthetic.py      #   çevrimdışı deterministik veri
-├── indicators.py         # SMA, EMA, RSI
-├── strategy/             # Stratejiler
-│   ├── base.py           #   Strategy arayüzü (hedef ağırlık 0..1)
-│   ├── sma_crossover.py
-│   └── rsi.py
-├── portfolio.py          # Sanal long-only hesap (paper trading)
-├── engine.py             # backtest() + PaperTrader (canlı döngü)
-└── cli.py                # argparse komut satırı arayüzü
-```
-
-**Tasarım ilkeleri:**
-
-- Strateji "hedef pozisyon ağırlığı" (0.0 = nakit, 1.0 = tam yatırım) üretir;
-  motor bunu uygular. Bu sayede aynı strateji hem backtest hem canlı döngüde
-  çalışır.
-- **Sinyal-kaçağı (lookahead bias) yok:** `t` barındaki sinyal `t+1` barının
-  açılış fiyatından uygulanır.
-- Veri katmanı arayüz arkasında; gerçek/sahte veri arasında geçiş tek bayrak.
-
-## Testler
-
-```bash
-python -m pytest -q
-```
-
-Tüm testler sentetik veriyle çalışır, ağ erişimi gerektirmez.
-
-## Yeni strateji ekleme
-
-1. `nasdaqbot/strategy/` altında `Strategy`'den türeyen bir sınıf yaz;
-   `generate(df) -> pd.Series` (0..1 hedef ağırlık) uygula.
-2. `nasdaqbot/strategy/__init__.py` içindeki `get_strategy` fabrikasına ekle.
-3. CLI'da `--strategy <isim>` ile kullan.
+Tüm parametreler `os.getenv` ile ortam değişkeninden override edilebilir
+(örn. `STRESS_RISK_PCT`, `STRESS_DAILY_DD`).

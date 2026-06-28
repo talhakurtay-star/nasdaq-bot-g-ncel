@@ -2,24 +2,21 @@
 __pycache__/
 *.py[cod]
 *.egg-info/
-.eggs/
-build/
-dist/
 .venv/
 venv/
 env/
 
-# Test / coverage
-.pytest_cache/
-.coverage
-htmlcov/
-
-# Bot çıktıları / durumu
-data_cache/
+# Bot çıktıları
+**/logs/
+**/results/
 *.log
-state/
-*.csv
-!tests/**/*.csv
+temp_metrics.json
+optimize_results.json
+optimize_leaderboard.txt
+
+# Sırlar (MT5 / Telegram) — asla commit etme
+.env
+*.secret
 
 # IDE / OS
 .idea/

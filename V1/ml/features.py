@@ -21,7 +21,14 @@ except ImportError:
     _PTA = False
 
 if not _TALIB and not _PTA:
-    raise ImportError("talib veya pandas_ta kurulu olmalı.")
+    # talib/pandas_ta yoksa saf-pandas fallback'leri kullanılır (aşağıdaki
+    # _ema/_rsi/_atr/_adx/_macd/_bbands hepsi pandas implementasyonuna sahiptir).
+    # Bu sayede bot ek C-kütüphanesi gerektirmeden çalışabilir.
+    import warnings
+    warnings.warn(
+        "talib/pandas_ta bulunamadı — saf-pandas gösterge fallback'leri kullanılıyor.",
+        stacklevel=2,
+    )
 
 try:
     from config.settings import (
